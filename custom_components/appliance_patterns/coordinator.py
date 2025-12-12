@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 from math import ceil, floor
 from statistics import mean
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
+
 from .const import (
     CONF_MIN_RUN_DURATION,
     CONF_OFF_DELAY,
@@ -22,6 +22,7 @@ from .const import (
 )
 from .ml.feature_extraction import downsample_series, window_to_series
 from .ml.model import AppliancePatternModel, MatchResult
+from .run_tracker import RunTracker
 from .storage.db import PatternStorage
 
 
@@ -56,93 +57,6 @@ class ApplianceCoordinator:
         self.data = state
         for listener in list(self._listeners):
             listener()
-
-
-class RunTracker:
-    def __init__(
-        self,
-        on_threshold: float,
-        off_threshold: float,
-        off_delay: float,
-        sample_interval: int,
-        window_duration: int,
-        min_run_duration: int,
-    ) -> None:
-        self._on_threshold = on_threshold
-        self._off_threshold = off_threshold
-        self._off_delay = off_delay
-        self._sample_interval = sample_interval
-        self._window_duration = window_duration
-        self._min_run_duration = min_run_duration
-        self._window: deque[tuple[float, float]] = deque()
-        self._state = STATE_IDLE
-        self._current_run: list[tuple[float, float]] = []
-        self._last_sample_ts: float | None = None
-        self._last_record_ts: float | None = None
-        self._last_active_ts: float | None = None
-        self._run_start: float | None = None
-
-    @property
-    def state(self) -> str:
-        return self._state
-
-    @property
-    def run_start(self) -> float | None:
-        return self._run_start
-
-    @property
-    def window(self) -> Iterable[tuple[float, float]]:
-        return list(self._window)
-
-    def current_elapsed(self, timestamp: float | None = None) -> float:
-        if self._state != STATE_RUNNING or self._run_start is None:
-            return 0.0
-        current = timestamp or self._last_sample_ts or self._run_start
-        return max(0.0, current - self._run_start)
-
-    def process_sample(self, timestamp: float, power: float) -> list[tuple[float, float]] | None:
-        self._append_window(timestamp, power)
-        self._last_sample_ts = timestamp
-        if power >= self._on_threshold and self._state == STATE_IDLE:
-            self._start_run(timestamp)
-        if self._state == STATE_RUNNING:
-            if power >= self._off_threshold:
-                self._last_active_ts = timestamp
-            record = not self._last_record_ts or timestamp - self._last_record_ts >= self._sample_interval
-            if record:
-                self._current_run.append((timestamp, power))
-                self._last_record_ts = timestamp
-            if self._last_active_ts and timestamp - self._last_active_ts >= self._off_delay:
-                return self._stop_run()
-        return None
-
-    def _append_window(self, timestamp: float, power: float) -> None:
-        self._window.append((timestamp, power))
-        cutoff = timestamp - self._window_duration
-        while self._window and self._window[0][0] < cutoff:
-            self._window.popleft()
-
-    def _start_run(self, timestamp: float) -> None:
-        self._state = STATE_RUNNING
-        self._current_run = []
-        self._run_start = timestamp
-        self._last_active_ts = timestamp
-        self._last_record_ts = None
-
-    def _stop_run(self) -> list[tuple[float, float]] | None:
-        if self._run_start is None:
-            self._state = STATE_IDLE
-            self._current_run = []
-            return None
-        duration = self._current_run[-1][0] - self._run_start if self._current_run else 0.0
-        run = list(self._current_run)
-        self._state = STATE_IDLE
-        self._current_run = []
-        self._run_start = None
-        self._last_active_ts = None
-        if duration >= self._min_run_duration:
-            return run
-        return None
 
 
 class ApplianceRuntimeManager:

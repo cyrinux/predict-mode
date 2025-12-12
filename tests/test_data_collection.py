@@ -1,4 +1,5 @@
-from custom_components.appliance_patterns.coordinator import RunTracker, STATE_IDLE, STATE_RUNNING
+from custom_components.appliance_patterns.const import STATE_IDLE, STATE_RUNNING
+from custom_components.appliance_patterns.run_tracker import RunTracker
 
 
 def test_run_tracker_detects_complete_cycle() -> None:
@@ -22,6 +23,8 @@ def test_run_tracker_detects_complete_cycle() -> None:
     for _ in range(6):
         completed = tracker.process_sample(timestamp, 0.5)
         timestamp += 5
+        if completed is not None:
+            break
     assert tracker.state == STATE_IDLE
     assert completed is not None
     assert len(completed) >= 6

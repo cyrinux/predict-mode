@@ -112,12 +112,13 @@ cards:
 
 ## Tests
 
-Four test modules cover:
+Five test modules cover:
 
 1. Run tracking and start/stop detection (`RunTracker` logic).
 2. DTW distance computation.
 3. Clustering behavior.
 4. Remaining-time prediction.
+5. Real washing-machine history (`tests/fixtures/washing_machine_history.csv`) to validate run tracking and DTW matching on recorded data.
 
 From the repo root:
 

@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from homeassistant.const import Platform
+try:
+    from homeassistant.const import Platform
+except ModuleNotFoundError:  # pragma: no cover - only used in unit tests
+    from enum import Enum
+
+    class Platform(Enum):
+        SENSOR = "sensor"
+        BUTTON = "button"
 
 DOMAIN = "appliance_patterns"
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
