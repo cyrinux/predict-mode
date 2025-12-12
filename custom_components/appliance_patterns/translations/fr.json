@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Appliance Patterns",
+        "description": "Sélectionnez les capteurs de puissance (en watts) associés à cet appareil puis ajustez les seuils. Conseils :\n- seuil ON légèrement au‑dessus de la veille\n- seuil OFF proche de zéro mais au‑dessus du bruit\n- le délai OFF doit couvrir les pauses courtes\n- la fenêtre doit être plus longue que le plus grand programme\nAstuce détection rapide :\n- descendez l'intervalle d'échantillonnage à 2–3 s pour les programmes express\n- gardez une fenêtre autour de 900–1 200 s si vous ciblez surtout des cycles de 30 min\n- faites tourner chaque programme deux fois pour créer des gabarits fiables",
+        "data": {
+          "name": "Nom de l'appareil (utilisé pour les entités)",
+          "power_sensors": "Capteurs de puissance surveillés (W)",
+          "on_power": "Seuil de démarrage en watts (ex : 15 W pour LV)",
+          "off_power": "Seuil d'arrêt en watts (ex : 3‑5 W en veille)",
+          "off_delay": "Délai de coupure en secondes (tampon avant fin)",
+          "sample_interval": "Intervalle d'échantillonnage en secondes (5 s conseillé)",
+          "window_duration": "Fenêtre d'analyse en secondes (>= plus long cycle, ex : 1800 s)",
+          "min_run_duration": "Durée minimale en secondes pour enregistrer un cycle"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "options": {
+        "title": "Paramètres de détection",
+        "description": "Ajustez les seuils en fonctionnement. Astuces :\n- baissez le seuil ON si des cycles sont manqués\n- augmentez seuil/délai OFF si les cycles se coupent trop tôt\n- augmentez la fenêtre pour les programmes très longs\n- réduisez fenêtre et échantillonnage si vous ne suivez que des cycles rapides (≈30 min)",
+        "data": {
+          "on_power": "Seuil de démarrage (W)",
+          "off_power": "Seuil d'arrêt (W)",
+          "off_delay": "Délai d'arrêt (s)",
+          "sample_interval": "Intervalle d'échantillonnage (s)",
+          "window_duration": "Fenêtre d'analyse (s)",
+          "min_run_duration": "Durée minimale d'un cycle (s)"
+        }
+      }
+    }
+  }
+}

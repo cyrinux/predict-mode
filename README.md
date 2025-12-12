@@ -39,6 +39,21 @@ appliance_patterns:
       min_run_duration: 600
 ```
 
+### Conseils de réglage
+
+- `on_power` (W) : choisissez un seuil juste au-dessus de la consommation de veille. 10–20 W conviennent pour la plupart des lave-vaisselle.
+- `off_power` (W) : placez-le juste au-dessus du bruit résiduel (3–5 W). Si les cycles ne se terminent pas, augmentez légèrement.
+- `off_delay` (s) : durée pendant laquelle la puissance doit rester en dessous de `off_power` avant de considérer le cycle terminé. 60–180 s évitent les décrochages pendant les pauses.
+- `sample_interval` (s) : intervalle de sous-échantillonnage. 5 s équilibre précision et charge CPU.
+- `window_duration` (s) : doit dépasser la durée du programme le plus long (ex. 1800 s pour 30 min).
+- `min_run_duration` (s) : filtre les bruits courts (300–600 s pour l’électroménager).
+
+### Optimiser la détection rapide
+
+- **Réaction immédiate** : conservez un `on_power` faible (juste au-dessus de la veille) et un `off_delay` court (60–90 s) pour que les cycles soient confirmés dès les premières minutes.
+- **Fenêtre compacte** : pour des programmes express (≤ 30 min), paramétrez `window_duration` autour de 900–1 200 s et réduisez `sample_interval` à 2–3 s afin que la fenêtre glissante capture rapidement la signature du cycle.
+- **Apprentissage ciblé** : lancez chaque programme au moins deux fois pour constituer des gabarits fiables. Plus la portion initiale du cycle ressemble à un motif connu, plus vite `sensor.<nom>_program` renverra le bon libellé et le temps restant (`durée apprise - temps écoulé`) sera précis.
+
 ## Fonctionnement ML
 
 - **Collecte** : l'intégration construit une fenêtre glissante (par défaut 30 min) alimentée par les capteurs sélectionnés et détecte automatiquement les démarcations de cycle via les seuils on/off.

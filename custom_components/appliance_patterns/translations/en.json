@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Appliance Patterns",
+        "description": "Select the power sensors (in watts) feeding this appliance and fine‑tune the detection thresholds. Recommendations:\n- set the ON threshold slightly above the standby draw\n- set the OFF threshold near zero but still above noise\n- OFF delay must be long enough to ignore short pauses\n- the detection window should be longer than the longest program\nQuick recognition tips:\n- reduce sampling interval to 2–3 s for express programs\n- keep the window around 900–1 200 s if you mainly track 30 min cycles\n- run each program twice so the model learns reliable templates",
+        "data": {
+          "name": "Appliance name (label for the entities)",
+          "power_sensors": "Power sensors (W) to monitor",
+          "on_power": "Start threshold in watts (ex: 15 W for dishwasher)",
+          "off_power": "Stop threshold in watts (ex: 3‑5 W idle)",
+          "off_delay": "Stop delay in seconds (buffer before closing a run)",
+          "sample_interval": "Sampling interval in seconds (5 s gives good balance)",
+          "window_duration": "Detection window in seconds (>= longest cycle, e.g. 1800 s)",
+          "min_run_duration": "Minimum duration in seconds to store a run (filters spikes)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "options": {
+        "title": "Detection parameters",
+        "description": "Adjust thresholds and timings while the integration is running. Tips:\n- lower ON threshold if cycles are missed\n- raise OFF threshold/delay if runs split too early\n- increase window duration for very long programs\n- shorten window + sampling interval when you only need fast 30 min runs",
+        "data": {
+          "on_power": "Start threshold (W)",
+          "off_power": "Stop threshold (W)",
+          "off_delay": "Stop delay (s)",
+          "sample_interval": "Sampling interval (s)",
+          "window_duration": "Detection window (s)",
+          "min_run_duration": "Minimum run duration (s)"
+        }
+      }
+    }
+  }
+}
