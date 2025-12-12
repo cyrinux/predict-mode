@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.components.persistent_notification import async_create as notify_async_create
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -33,12 +32,7 @@ class AutoTuneButton(ButtonEntity):
         try:
             updates = await self._manager.async_auto_tune()
         except HomeAssistantError as err:
-            notify_async_create(
-                self.hass,
-                f"Auto-calibrage impossible : {err}",
-                title="Appliance Patterns",
-            )
-            raise
+            raise HomeAssistantError(f"Auto-calibrage impossible : {err}") from err
         self.hass.bus.async_fire(
             f"{DOMAIN}_auto_tuned",
             {

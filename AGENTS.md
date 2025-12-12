@@ -138,13 +138,4 @@ Generate:
 - Code must be directly runnable in Home Assistant.
 - Use modern Python.
 - Produce all files automatically.
-
----
-
-If you want, I can also generate:
-
-✅ a complete **Cursor task plan** (`cursor.json`)
-✅ the **initial directory tree with stubs**
-✅ the **first working version of the plugin**
-
-Tell me what you want next.
+- Speak english everywhere but add i18n translations (minimum add french) of the program

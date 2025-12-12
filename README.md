@@ -1,36 +1,36 @@
 # Appliance Patterns
 
-Intégration Home Assistant dédiée à l'apprentissage local des profils énergétiques d'appareils ménagers. Elle collecte les séries temporelles des capteurs de puissance, isole les cycles, découvre automatiquement les motifs récurrents et fournit en temps réel le programme détecté, la phase en cours, le temps restant estimé et la confiance associée.
+Home Assistant custom integration that learns local energy-usage patterns for appliances such as dishwashers, washing machines, or dryers. It records power time series, segments runs automatically, clusters recurring programs, and exposes in real time the detected program, phase, remaining time, and confidence.
 
 ## Installation
 
-1. Copier le dossier `custom_components/appliance_patterns` dans votre instance Home Assistant (dossier `config/custom_components`).
-2. Redémarrer Home Assistant.
-3. Ajouter l'intégration via *Paramètres → Appareils et services → Ajouter une intégration* et sélectionner **Appliance Patterns**.
+1. Copy `custom_components/appliance_patterns` into Home Assistant’s `config/custom_components` directory.
+2. Restart Home Assistant.
+3. Go to *Settings → Devices & Services → Add Integration*, search for **Appliance Patterns**, and follow the wizard.
 
 ## Configuration
 
-Chaque entrée de configuration représente un appareil et accepte :
+Each config entry represents one appliance:
 
 | Option | Description |
 | --- | --- |
-| `name` | Nom de l'appareil (utilisé pour les entités) |
-| `power_sensors` | Liste des capteurs de puissance (W) à surveiller |
-| `on_power` | Seuil de démarrage (W) |
-| `off_power` | Seuil d'arrêt (W) |
-| `off_delay` | Durée en secondes sous le seuil avant clôture du cycle |
-| `sample_interval` | Intervalle de sous-échantillonnage (s) |
-| `window_duration` | Taille de la fenêtre de détection (s) |
-| `min_run_duration` | Durée minimale d'un cycle pour être enregistré |
+| `name` | Friendly name used for entity labels |
+| `power_sensors` | List of power sensors (W) feeding this appliance |
+| `on_power` | Power threshold that marks the beginning of a run |
+| `off_power` | Threshold below which the appliance is considered idle |
+| `off_delay` | Seconds spent under `off_power` before closing a run |
+| `sample_interval` | Down-sampling interval in seconds |
+| `window_duration` | Detection window (seconds) used for matching |
+| `min_run_duration` | Minimum run length (seconds) kept in storage |
 
-Configuration YAML (optionnelle) :
+Optional YAML example:
 
 ```yaml
 appliance_patterns:
   appliances:
-    - name: lave_vaisselle
+    - name: dishwasher
       power_sensors:
-        - sensor.lave_vaisselle_power
+        - sensor.dishwasher_power
       on_power: 20
       off_power: 5
       off_delay: 120
@@ -39,92 +39,93 @@ appliance_patterns:
       min_run_duration: 600
 ```
 
-### Conseils de réglage
+### Tuning cheat sheet
 
-- `on_power` (W) : choisissez un seuil juste au-dessus de la consommation de veille. 10–20 W conviennent pour la plupart des lave-vaisselle.
-- `off_power` (W) : placez-le juste au-dessus du bruit résiduel (3–5 W). Si les cycles ne se terminent pas, augmentez légèrement.
-- `off_delay` (s) : durée pendant laquelle la puissance doit rester en dessous de `off_power` avant de considérer le cycle terminé. 60–180 s évitent les décrochages pendant les pauses.
-- `sample_interval` (s) : intervalle de sous-échantillonnage. 5 s équilibre précision et charge CPU.
-- `window_duration` (s) : doit dépasser la durée du programme le plus long (ex. 1800 s pour 30 min).
-- `min_run_duration` (s) : filtre les bruits courts (300–600 s pour l’électroménager).
+- `on_power` (W): set it slightly above standby draw (10–20 W for most dishwashers).
+- `off_power` (W): keep it just above background noise (3–5 W) and bump it up if runs never end.
+- `off_delay` (s): duration the appliance must stay below `off_power` before finishing the run. 60–180 s avoids breaking on short pauses.
+- `sample_interval` (s): 5 s balances accuracy and CPU, but can go down to 2–3 s for fast detection.
+- `window_duration` (s): longer than your longest program (e.g., 1 800 s for a 30 min run).
+- `min_run_duration` (s): filters out spikes (300–600 s works for most appliances).
 
-### Optimiser la détection rapide
+### Fast recognition tips
 
-- **Réaction immédiate** : conservez un `on_power` faible (juste au-dessus de la veille) et un `off_delay` court (60–90 s) pour que les cycles soient confirmés dès les premières minutes.
-- **Fenêtre compacte** : pour des programmes express (≤ 30 min), paramétrez `window_duration` autour de 900–1 200 s et réduisez `sample_interval` à 2–3 s afin que la fenêtre glissante capture rapidement la signature du cycle.
-- **Apprentissage ciblé** : lancez chaque programme au moins deux fois pour constituer des gabarits fiables. Plus la portion initiale du cycle ressemble à un motif connu, plus vite `sensor.<nom>_program` renverra le bon libellé et le temps restant (`durée apprise - temps écoulé`) sera précis.
+- **Immediate reaction**: keep `on_power` low and `off_delay` short (60–90 s) to confirm runs during the first minutes.
+- **Compact window**: for 30 min express programs, set `window_duration` to ~900–1 200 s and `sample_interval` to 2–3 s so the sliding window captures the signature quickly.
+- **Targeted learning**: run each program at least twice so the model stores clean templates. As soon as the current window looks like a known template, `sensor.<name>_program` publishes the right label and the remaining time becomes reliable.
 
-## Fonctionnement ML
+## Machine-learning pipeline
 
-- **Collecte** : l'intégration construit une fenêtre glissante (par défaut 30 min) alimentée par les capteurs sélectionnés et détecte automatiquement les démarcations de cycle via les seuils on/off.
-- **Prétraitement** : chaque cycle est sous-échantillonné, normalisé et stocké localement (API Storage de Home Assistant, pas de Cloud).
-- **Découverte de motifs** : un modèle incrémental regroupe les cycles par similarité (DTW) et génère des gabarits moyens. Chaque gabarit conserve durée moyenne, enveloppe de variance et segments de phases extraits par analyse de pente.
-- **Détection temps réel** : la fenêtre active est comparée aux gabarits via DTW. Le meilleur score fournit programme, phase courante, temps restant (`durée_apprise - temps_ecoulé`) et confiance normalisée.
+- **Collection**: sliding window (default 30 min) driven by the selected sensors, with automatic start/stop detection based on thresholds.
+- **Pre-processing**: each run is down-sampled, normalized, and stored locally through Home Assistant Storage (no cloud).
+- **Pattern discovery**: runs are clustered (DTW distance) and averaged into templates that keep duration, variance envelope, and phase segments.
+- **Real-time detection**: the live window is compared to templates via DTW; the best score yields program label, phase, confidence, and `predicted_duration - elapsed`.
 
-## Entités créées
+## Entities
 
-Pour un appareil nommé `lave_vaisselle` :
+For an appliance named `dishwasher`:
 
-- `sensor.lave_vaisselle_state`
-- `sensor.lave_vaisselle_program`
-- `sensor.lave_vaisselle_phase`
-- `sensor.lave_vaisselle_time_remaining`
-- `sensor.lave_vaisselle_confidence`
-- `button.lave_vaisselle_auto_tune` (déclenche l'auto-calibrage des seuils)
+- `sensor.dishwasher_state`
+- `sensor.dishwasher_program`
+- `sensor.dishwasher_phase`
+- `sensor.dishwasher_time_remaining`
+- `sensor.dishwasher_confidence`
+- `button.dishwasher_auto_tune` (runs automatic calibration)
 
 ## Services
 
 | Service | Description |
 | --- | --- |
-| `appliance_patterns.reset_patterns` | Réinitialise les motifs appris pour une entrée (paramètre `entry_id`). |
-| `appliance_patterns.export_patterns` | Exporte les cycles et gabarits vers l'événement `appliance_patterns_exported`. |
-| `appliance_patterns.import_patterns` | Importe un jeu de motifs/cycles (paramètres `entry_id`, `payload`). |
-| `appliance_patterns.auto_tune` | Analyse les derniers cycles et ajuste automatiquement `on/off_power`, `off_delay`, `sample_interval`, `window_duration`, `min_run_duration`. |
+| `appliance_patterns.reset_patterns` | Clears learned runs/templates for an `entry_id`. |
+| `appliance_patterns.export_patterns` | Fires `appliance_patterns_exported` with stored runs/templates. |
+| `appliance_patterns.import_patterns` | Imports patterns for an `entry_id` using a payload dict. |
+| `appliance_patterns.auto_tune` | Analyses up to five recent runs and recalibrates `on/off_power`, `off_delay`, `sample_interval`, `window_duration`, `min_run_duration`. |
 
-### Auto-calibrage
+### Auto-calibration flow
 
-- Utilisez le bouton `button.<nom>_auto_tune` ou le service `appliance_patterns.auto_tune` avec l’`entry_id`.
-- Lancez-le juste après un cycle complet : il examine jusqu’à cinq cycles récents, mesure la consommation de veille/active et met à jour les options de l’intégration.
-- Un événement `appliance_patterns_auto_tuned` est émis avec les nouveaux réglages pour vérification (et une notification est affichée si la calibration échoue faute de données).
+- Use the `button.<name>_auto_tune` entity or call `appliance_patterns.auto_tune` with the integration `entry_id`.
+- Trigger it right after a full cycle: it computes standby vs active power percentiles, longest pauses, average duration, and updates the config entry options.
+- An event `appliance_patterns_auto_tuned` is emitted with the derived settings so you can log or display them (and Home Assistant shows a popup if not enough data is available).
 
-## Exemple Lovelace
+## Lovelace example
 
 ```yaml
 type: vertical-stack
 cards:
   - type: entities
-    title: Lave-vaisselle
+    title: Dishwasher
     entities:
-      - sensor.lave_vaisselle_state
-      - sensor.lave_vaisselle_program
-      - sensor.lave_vaisselle_phase
+      - sensor.dishwasher_state
+      - sensor.dishwasher_program
+      - sensor.dishwasher_phase
+      - button.dishwasher_auto_tune
   - type: gauge
-    name: Confiance
-    entity: sensor.lave_vaisselle_confidence
+    name: Confidence
+    entity: sensor.dishwasher_confidence
     min: 0
     max: 100
   - type: sensor
-    entity: sensor.lave_vaisselle_time_remaining
+    entity: sensor.dishwasher_time_remaining
     graph: line
     detail: 2
 ```
 
 ## Tests
 
-Quatre jeux de tests couvrent :
+Four test modules cover:
 
-1. Collecte et détection des cycles (logique `RunTracker`).
-2. Distance DTW.
-3. Groupement des cycles.
-4. Prédiction du temps restant.
+1. Run tracking and start/stop detection (`RunTracker` logic).
+2. DTW distance computation.
+3. Clustering behavior.
+4. Remaining-time prediction.
 
-Lancer la suite depuis la racine :
+From the repo root:
 
 ```bash
 pytest
 ```
 
-## Auteurs
+## Authors
 
-- Intégration développée par @cursor-project.
-- Contributions et direction fonctionnelle par @cyrinux.
+- Integration originally developed by @cursor-project.
+- Product guidance and contributions by @cyrinux.
