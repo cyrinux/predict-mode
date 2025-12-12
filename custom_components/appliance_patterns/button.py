@@ -33,7 +33,7 @@ class AutoTuneButton(ButtonEntity):
         try:
             updates = await self._manager.async_auto_tune()
         except HomeAssistantError as err:
-            await notify_async_create(
+            notify_async_create(
                 self.hass,
                 f"Auto-calibrage impossible : {err}",
                 title="Appliance Patterns",
