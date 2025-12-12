@@ -2,7 +2,7 @@
   "domain": "appliance_patterns",
   "name": "Appliance Patterns",
   "version": "0.1.0",
-  "codeowners": ["@cursor-project"],
+  "codeowners": ["@cursor-project", "@cyrinux"],
   "config_flow": true,
   "iot_class": "calculated",
   "requirements": []

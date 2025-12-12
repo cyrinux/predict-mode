@@ -2,12 +2,24 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Iterable
+from math import ceil, floor
+from statistics import mean
+from typing import Iterable, Sequence
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, State, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
-from .const import STATE_IDLE, STATE_RUNNING
+from .const import (
+    CONF_MIN_RUN_DURATION,
+    CONF_OFF_DELAY,
+    CONF_OFF_POWER,
+    CONF_ON_POWER,
+    CONF_SAMPLE_INTERVAL,
+    CONF_WINDOW_DURATION,
+    STATE_IDLE,
+    STATE_RUNNING,
+)
 from .ml.feature_extraction import downsample_series, window_to_series
 from .ml.model import AppliancePatternModel, MatchResult
 from .storage.db import PatternStorage
@@ -141,16 +153,19 @@ class ApplianceRuntimeManager:
         self.coordinator = ApplianceCoordinator()
         self.storage = PatternStorage(hass, entry.entry_id)
         self.model = AppliancePatternModel(config["sample_interval"])
-        self.tracker = RunTracker(
-            on_threshold=config["on_power"],
-            off_threshold=config["off_power"],
-            off_delay=config["off_delay"],
-            sample_interval=config["sample_interval"],
-            window_duration=config["window_duration"],
-            min_run_duration=config["min_run_duration"],
-        )
+        self._rebuild_tracker()
         self._listeners: list[CALLBACK_TYPE] = []
         self._match: MatchResult = MatchResult()
+
+    def _rebuild_tracker(self) -> None:
+        self.tracker = RunTracker(
+            on_threshold=self.config["on_power"],
+            off_threshold=self.config["off_power"],
+            off_delay=self.config["off_delay"],
+            sample_interval=self.config["sample_interval"],
+            window_duration=self.config["window_duration"],
+            min_run_duration=self.config["min_run_duration"],
+        )
 
     async def async_setup(self) -> None:
         stored = await self.storage.async_load()
@@ -170,6 +185,17 @@ class ApplianceRuntimeManager:
     async def async_import(self, payload: dict) -> None:
         await self.storage.async_import(payload)
         self.model.load(self.storage.get_patterns())
+
+    async def async_auto_tune(self) -> dict[str, float]:
+        await self.storage.async_load()
+        runs = self._recent_runs(self.storage.get_runs())
+        if not runs:
+            raise HomeAssistantError("Aucun cycle complet n'est disponible pour l'auto-calibrage.")
+        derived = self._derive_parameters(runs)
+        new_options = {**self.entry.options, **derived}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self._apply_derived_settings(derived)
+        return derived
 
     def export(self) -> dict:
         return self.storage.export()
@@ -230,6 +256,127 @@ class ApplianceRuntimeManager:
             last_sample=timestamp,
         )
         self.coordinator.async_set_state(state)
+
+    def _apply_derived_settings(self, derived: dict[str, float]) -> None:
+        for key in (
+            CONF_ON_POWER,
+            CONF_OFF_POWER,
+            CONF_OFF_DELAY,
+            CONF_SAMPLE_INTERVAL,
+            CONF_WINDOW_DURATION,
+            CONF_MIN_RUN_DURATION,
+        ):
+            if key in derived:
+                self.config[key] = derived[key]
+        self.config["on_power"] = self.config[CONF_ON_POWER]
+        self.config["off_power"] = self.config[CONF_OFF_POWER]
+        self.config["off_delay"] = self.config[CONF_OFF_DELAY]
+        self.config["sample_interval"] = self.config[CONF_SAMPLE_INTERVAL]
+        self.config["window_duration"] = self.config[CONF_WINDOW_DURATION]
+        self.config["min_run_duration"] = self.config[CONF_MIN_RUN_DURATION]
+        self.model._sample_interval = self.config["sample_interval"]
+        self._rebuild_tracker()
+
+    def _recent_runs(self, raw_runs: list[dict]) -> list[list[tuple[float, float]]]:
+        normalized: list[list[tuple[float, float]]] = []
+        for run in reversed(raw_runs):
+            samples = run.get("samples")
+            if not samples:
+                continue
+            converted: list[tuple[float, float]] = []
+            for item in samples:
+                if not isinstance(item, Sequence) or len(item) != 2:
+                    continue
+                try:
+                    ts = float(item[0])
+                    power = float(item[1])
+                except (TypeError, ValueError):
+                    continue
+                converted.append((ts, power))
+            if len(converted) < 3:
+                continue
+            converted.sort(key=lambda sample: sample[0])
+            normalized.append(converted)
+            if len(normalized) >= 5:
+                break
+        return normalized
+
+    def _derive_parameters(self, runs: list[list[tuple[float, float]]]) -> dict[str, float]:
+        values: list[float] = []
+        durations: list[float] = []
+        sampling: list[float] = []
+        for samples in runs:
+            duration = samples[-1][0] - samples[0][0]
+            if duration <= 0:
+                continue
+            durations.append(duration)
+            values.extend(power for _, power in samples)
+            intervals = [
+                samples[idx][0] - samples[idx - 1][0]
+                for idx in range(1, len(samples))
+                if samples[idx][0] > samples[idx - 1][0]
+            ]
+            if intervals:
+                sampling.append(sum(intervals) / len(intervals))
+        if len(values) < 3 or not durations:
+            raise HomeAssistantError("Cycles insuffisants pour dériver des paramètres fiables.")
+        sorted_values = sorted(values)
+        baseline = self._percentile(sorted_values, 0.2)
+        active = self._percentile(sorted_values, 0.7)
+        if active <= baseline:
+            active = baseline + max(5.0, baseline * 0.5)
+        off_power = round(max(1.0, baseline * 1.2), 1)
+        on_power = round(max(off_power + 1.0, baseline + (active - baseline) * 0.6), 1)
+        mean_duration = mean(durations)
+        window_duration = int(min(7200, max(600, mean_duration * 1.2)))
+        min_run_duration = int(max(60, min(mean_duration * 0.3, window_duration)))
+        if sampling:
+            sample_interval = int(max(2, min(10, round(mean(sampling)))))
+        else:
+            sample_interval = self.config["sample_interval"]
+        pauses = [self._longest_low_power(samples, off_power) for samples in runs]
+        longest_pause = max(pauses) if pauses else 0.0
+        off_delay = int(min(300, max(30, longest_pause * 1.2 if longest_pause else 90)))
+        return {
+            CONF_ON_POWER: on_power,
+            CONF_OFF_POWER: off_power,
+            CONF_OFF_DELAY: off_delay,
+            CONF_SAMPLE_INTERVAL: sample_interval,
+            CONF_WINDOW_DURATION: window_duration,
+            CONF_MIN_RUN_DURATION: min_run_duration,
+        }
+
+    @staticmethod
+    def _percentile(values: Sequence[float], percentile: float) -> float:
+        if not values:
+            return 0.0
+        if percentile <= 0:
+            return values[0]
+        if percentile >= 1:
+            return values[-1]
+        index = (len(values) - 1) * percentile
+        lower = floor(index)
+        upper = ceil(index)
+        if lower == upper:
+            return values[int(index)]
+        fraction = index - lower
+        return values[lower] + (values[upper] - values[lower]) * fraction
+
+    @staticmethod
+    def _longest_low_power(samples: list[tuple[float, float]], threshold: float) -> float:
+        longest = 0.0
+        start: float | None = None
+        for timestamp, power in samples:
+            if power <= threshold:
+                if start is None:
+                    start = timestamp
+            else:
+                if start is not None:
+                    longest = max(longest, timestamp - start)
+                    start = None
+        if start is not None:
+            longest = max(longest, samples[-1][0] - start)
+        return longest
 
     @staticmethod
     def _safe_float(value: str) -> float | None:

@@ -6,6 +6,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -32,6 +33,7 @@ from .const import (
     SERVICE_EXPORT,
     SERVICE_IMPORT,
     SERVICE_RESET,
+    SERVICE_AUTO_TUNE,
 )
 from .coordinator import ApplianceRuntimeManager
 
@@ -155,6 +157,21 @@ def _register_services(hass: HomeAssistant) -> None:
         manager = await _async_require_manager(call)
         await manager.async_import(call.data[ATTR_PAYLOAD])
 
+    async def _async_auto_tune(call: ServiceCall) -> None:
+        manager = await _async_require_manager(call)
+        try:
+            updates = await manager.async_auto_tune()
+        except HomeAssistantError:
+            raise
+        hass.bus.async_fire(
+            f"{DOMAIN}_auto_tuned",
+            {
+                ATTR_ENTRY_ID: call.data[ATTR_ENTRY_ID],
+                "settings": updates,
+            },
+        )
+
     hass.services.async_register(DOMAIN, SERVICE_RESET, _async_reset, schema=SERVICE_ENTRY_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_EXPORT, _async_export, schema=SERVICE_ENTRY_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_IMPORT, _async_import, schema=SERVICE_IMPORT_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_AUTO_TUNE, _async_auto_tune, schema=SERVICE_ENTRY_SCHEMA)

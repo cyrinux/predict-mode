@@ -21,7 +21,7 @@
     "step": {
       "options": {
         "title": "Paramètres de détection",
-        "description": "Ajustez les seuils en fonctionnement. Astuces :\n- baissez le seuil ON si des cycles sont manqués\n- augmentez seuil/délai OFF si les cycles se coupent trop tôt\n- augmentez la fenêtre pour les programmes très longs\n- réduisez fenêtre et échantillonnage si vous ne suivez que des cycles rapides (≈30 min)",
+        "description": "Ajustez les seuils en fonctionnement. Astuces :\n- baissez le seuil ON si des cycles sont manqués\n- augmentez seuil/délai OFF si les cycles se coupent trop tôt\n- augmentez la fenêtre pour les programmes très longs\n- réduisez fenêtre et échantillonnage si vous ne suivez que des cycles rapides (≈30 min)\nBesoin d’aide ? Utilisez le bouton d’auto-calibrage ou appelez le service auto_tune après un cycle complet.",
         "data": {
           "on_power": "Seuil de démarrage (W)",
           "off_power": "Seuil d'arrêt (W)",

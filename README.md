@@ -70,6 +70,7 @@ Pour un appareil nommé `lave_vaisselle` :
 - `sensor.lave_vaisselle_phase`
 - `sensor.lave_vaisselle_time_remaining`
 - `sensor.lave_vaisselle_confidence`
+- `button.lave_vaisselle_auto_tune` (déclenche l'auto-calibrage des seuils)
 
 ## Services
 
@@ -78,6 +79,13 @@ Pour un appareil nommé `lave_vaisselle` :
 | `appliance_patterns.reset_patterns` | Réinitialise les motifs appris pour une entrée (paramètre `entry_id`). |
 | `appliance_patterns.export_patterns` | Exporte les cycles et gabarits vers l'événement `appliance_patterns_exported`. |
 | `appliance_patterns.import_patterns` | Importe un jeu de motifs/cycles (paramètres `entry_id`, `payload`). |
+| `appliance_patterns.auto_tune` | Analyse les derniers cycles et ajuste automatiquement `on/off_power`, `off_delay`, `sample_interval`, `window_duration`, `min_run_duration`. |
+
+### Auto-calibrage
+
+- Utilisez le bouton `button.<nom>_auto_tune` ou le service `appliance_patterns.auto_tune` avec l’`entry_id`.
+- Lancez-le juste après un cycle complet : il examine jusqu’à cinq cycles récents, mesure la consommation de veille/active et met à jour les options de l’intégration.
+- Un événement `appliance_patterns_auto_tuned` est émis avec les nouveaux réglages pour vérification (et une notification est affichée si la calibration échoue faute de données).
 
 ## Exemple Lovelace
 
@@ -115,3 +123,8 @@ Lancer la suite depuis la racine :
 ```bash
 pytest
 ```
+
+## Auteurs
+
+- Intégration développée par @cursor-project.
+- Contributions et direction fonctionnelle par @cyrinux.

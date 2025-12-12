@@ -3,7 +3,7 @@ from __future__ import annotations
 from homeassistant.const import Platform
 
 DOMAIN = "appliance_patterns"
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 CONF_APPLIANCES = "appliances"
 CONF_SENSORS = "power_sensors"
 CONF_ON_POWER = "on_power"
@@ -24,6 +24,7 @@ DEFAULT_PHASE_METHOD = "slope"
 SERVICE_RESET = "reset_patterns"
 SERVICE_EXPORT = "export_patterns"
 SERVICE_IMPORT = "import_patterns"
+SERVICE_AUTO_TUNE = "auto_tune"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_PAYLOAD = "payload"
 ATTR_APPLIANCE = "appliance"

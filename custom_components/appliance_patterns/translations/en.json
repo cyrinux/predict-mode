@@ -21,7 +21,7 @@
     "step": {
       "options": {
         "title": "Detection parameters",
-        "description": "Adjust thresholds and timings while the integration is running. Tips:\n- lower ON threshold if cycles are missed\n- raise OFF threshold/delay if runs split too early\n- increase window duration for very long programs\n- shorten window + sampling interval when you only need fast 30 min runs",
+        "description": "Adjust thresholds and timings while the integration is running. Tips:\n- lower ON threshold if cycles are missed\n- raise OFF threshold/delay if runs split too early\n- increase window duration for very long programs\n- shorten window + sampling interval when you only need fast 30 min runs\nNeed help? Press the Auto-calibration button or call the auto_tune service after a full cycle.",
         "data": {
           "on_power": "Start threshold (W)",
           "off_power": "Stop threshold (W)",
